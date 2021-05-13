@@ -40,7 +40,8 @@
   可以通过proxy或Object.defineProperty设置set时修改dom进度展示
   暂停时abort后，切片进度实际为0
   报错重试，并发控制 这些非文件上传核心点。应该归为请求中实现。
-思维导图 前端代码 function post(url = &amp;#39;http://localhost:8100/upload&amp;#39;, data, { onUploadProgress = (e) =&amp;gt; undefined, getCancel = (abort) =&amp;gt; undefined, } = {}) { return new Promise&amp;lt;{ data: any }&amp;gt;(resolve =&amp;gt; { const xhr = new XMLHttpRequest(); xhr.
+思维导图 前端代码 index.ts
+function post(url = &amp;#39;http://localhost:8100/upload&amp;#39;, data, { onUploadProgress = (e) =&amp;gt; undefined, getCancel = (abort) =&amp;gt; undefined, } = {}) { return new Promise&amp;lt;{ data: any }&amp;gt;(resolve =&amp;gt; { const xhr = new XMLHttpRequest(); xhr.
           
         
         </description>
