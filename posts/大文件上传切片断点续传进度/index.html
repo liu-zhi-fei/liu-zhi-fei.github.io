@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+  <head>
+    
+      <title>
+        大文件上传（切片，断点续传，进度） ::
+        打工人. — 为了更美好的明天!
+      </title>
+    
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta
+  name="description"
+  content="大文件上传（切片，断点续传，进度） 此文只将关键的原理点写出。
+大文件切片上传原理 上传，合并   利用Blob.prototype.slice进行文件切片
+  FormData携带chunk，filename，hash，index等数据，上传到服务端，收到所有切片后按index合并
+  web-worker生成hash   通过库，例如spark-md5生成hash
+  创建生成hash的js文件，使用时通过new Woker(url)来引入， 通过postMessage来传递hash值
+  暂停/继续   XMLHttpRequest的abort()取消上传切片，实现暂停
+  继续时，查询服务器已上传的切片序列，上传其余切片
+ 也可以通过本地storage实现，但是服务器更准确，更不易出BUG    进度条   XMLHttpRequest的upload.onprogress事件，查询进度
+ 或者用websocket，需要服务端也是用websocket    将所有切片进度相加，即为总进度
+  可以通过proxy或Object.defineProperty设置set时修改dom进度展示
+  暂停时abort后，切片进度实际为0
+  报错重试，并发控制 这些非文件上传核心点。应该归为请求中实现。
+思维导图 前端代码 function post(url = &amp;#39;http://localhost:8100/upload&amp;#39;, data, { onUploadProgress = (e) =&amp;gt; undefined, getCancel = (abort) =&amp;gt; undefined, } = {}) { return new Promise&amp;lt;{ data: any }&amp;gt;(resolve =&amp;gt; { const xhr = new XMLHttpRequest(); xhr."
+/>
+<meta
+  name="keywords"
+  content=""
+/>
+<meta name="robots" content="noodp" />
+<link rel="canonical" href="https://liu-zhi-fei.github.io/posts/%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E5%88%87%E7%89%87%E6%96%AD%E7%82%B9%E7%BB%AD%E4%BC%A0%E8%BF%9B%E5%BA%A6/" />
+
+
+
+
+
+<link rel="stylesheet" href="https://liu-zhi-fei.github.io/assets/style.css" />
+
+<link rel="stylesheet" href="https://liu-zhi-fei.github.io/style.css" />
+
+
+<link
+  rel="apple-touch-icon-precomposed"
+  sizes="144x144"
+  href="https://liu-zhi-fei.github.io/img/apple-touch-icon-144-precomposed.png"
+/>
+<link rel="shortcut icon" href="https://liu-zhi-fei.github.io/img/favicon.png" />
+
+
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-Italic.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-Regular.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-Medium.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-MediumItalic.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-Bold.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+<link href="https://liu-zhi-fei.github.io/assets/fonts/Inter-BoldItalic.woff2" rel="preload" type="font/woff2" as="font" crossorigin="">
+
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="大文件上传（切片，断点续传，进度）"/>
+<meta name="twitter:description" content="大文件上传（切片，断点续传，进度） 此文只将关键的原理点写出。
+大文件切片上传原理 上传，合并   利用Blob.prototype.slice进行文件切片
+  FormData携带chunk，filename，hash，index等数据，上传到服务端，收到所有切片后按index合并
+  web-worker生成hash   通过库，例如spark-md5生成hash
+  创建生成hash的js文件，使用时通过new Woker(url)来引入， 通过postMessage来传递hash值
+  暂停/继续   XMLHttpRequest的abort()取消上传切片，实现暂停
+  继续时，查询服务器已上传的切片序列，上传其余切片
+ 也可以通过本地storage实现，但是服务器更准确，更不易出BUG    进度条   XMLHttpRequest的upload.onprogress事件，查询进度
+ 或者用websocket，需要服务端也是用websocket    将所有切片进度相加，即为总进度
+  可以通过proxy或Object.defineProperty设置set时修改dom进度展示
+  暂停时abort后，切片进度实际为0
+  报错重试，并发控制 这些非文件上传核心点。应该归为请求中实现。
+思维导图 前端代码 function post(url = &#39;http://localhost:8100/upload&#39;, data, { onUploadProgress = (e) =&gt; undefined, getCancel = (abort) =&gt; undefined, } = {}) { return new Promise&lt;{ data: any }&gt;(resolve =&gt; { const xhr = new XMLHttpRequest(); xhr."/>
+
+
+
+<meta property="og:title" content="大文件上传（切片，断点续传，进度）" />
+<meta property="og:description" content="大文件上传（切片，断点续传，进度） 此文只将关键的原理点写出。
+大文件切片上传原理 上传，合并   利用Blob.prototype.slice进行文件切片
+  FormData携带chunk，filename，hash，index等数据，上传到服务端，收到所有切片后按index合并
+  web-worker生成hash   通过库，例如spark-md5生成hash
+  创建生成hash的js文件，使用时通过new Woker(url)来引入， 通过postMessage来传递hash值
+  暂停/继续   XMLHttpRequest的abort()取消上传切片，实现暂停
+  继续时，查询服务器已上传的切片序列，上传其余切片
+ 也可以通过本地storage实现，但是服务器更准确，更不易出BUG    进度条   XMLHttpRequest的upload.onprogress事件，查询进度
+ 或者用websocket，需要服务端也是用websocket    将所有切片进度相加，即为总进度
+  可以通过proxy或Object.defineProperty设置set时修改dom进度展示
+  暂停时abort后，切片进度实际为0
+  报错重试，并发控制 这些非文件上传核心点。应该归为请求中实现。
+思维导图 前端代码 function post(url = &#39;http://localhost:8100/upload&#39;, data, { onUploadProgress = (e) =&gt; undefined, getCancel = (abort) =&gt; undefined, } = {}) { return new Promise&lt;{ data: any }&gt;(resolve =&gt; { const xhr = new XMLHttpRequest(); xhr." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://liu-zhi-fei.github.io/posts/%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E5%88%87%E7%89%87%E6%96%AD%E7%82%B9%E7%BB%AD%E4%BC%A0%E8%BF%9B%E5%BA%A6/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2021-05-13T23:48:18&#43;08:00" />
+<meta property="article:modified_time" content="2021-05-13T23:48:18&#43;08:00" /><meta property="og:site_name" content="打工人." />
+
+
+
+
+
+
+
+  </head>
+  <body class="dark-theme">
+    <div class="container">
+      <header class="header">
+  <span class="header__inner">
+    <a
+  href="/"
+  class="logo"
+  style="text-decoration: none;"
+>
+  
+    <span class="logo__mark"><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44">
+  <path fill="none" d="M15 8l14.729 14.382L15 35.367" />
+</svg>
+</span>
+    <span class="logo__text"
+      >hello frizhd</span
+    >
+    <span class="logo__cursor"></span>
+  
+</a>
+
+    <span class="header__right">
+      
+        <nav class="menu">
+  <ul class="menu__inner menu__inner--desktop">
+    
+      
+        
+          <li><a href="/about">About</a></li>
+        
+      
+        
+          <li><a href="/showcase">Showcase</a></li>
+        
+      
+      
+      
+  </ul>
+
+  <ul class="menu__inner menu__inner--mobile">
+    
+      
+        <li><a href="/about">About</a></li>
+      
+    
+      
+        <li><a href="/showcase">Showcase</a></li>
+      
+    
+  </ul>
+</nav>
+
+        <span class="menu-trigger">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M0 0h24v24H0z" fill="none" />
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" />
+          </svg>
+        </span>
+      
+      <span class="theme-toggle">
+        <svg
+  class="theme-toggler"
+  width="24"
+  height="24"
+  viewBox="0 0 48 48"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <path
+    d="M22 41C32.4934 41 41 32.4934 41 22C41 11.5066 32.4934 3 22
+  3C11.5066 3 3 11.5066 3 22C3 32.4934 11.5066 41 22 41ZM7 22C7
+  13.7157 13.7157 7 22 7V37C13.7157 37 7 30.2843 7 22Z"
+  />
+</svg>
+
+      </span>
+    </span>
+  </span>
+</header>
+
+
+      <div class="content">
+        
+  
+  
+
+  <div class="post">
+    <h1 class="post-title">大文件上传（切片，断点续传，进度）</h1>
+    <div class="post-meta">
+      
+        <span class="post-date">
+          2021-05-13
+        </span>
+
+        
+          
+        
+      
+
+      
+
+
+      
+    </div>
+
+    
+
+    
+
+    <div class="post-content">
+      
+      <h1 id="大文件上传切片断点续传进度">大文件上传（切片，断点续传，进度）</h1>
+<p>此文只将关键的原理点写出。</p>
+<h2 id="大文件切片上传原理">大文件切片上传原理</h2>
+<h3 id="上传合并">上传，合并</h3>
+<ul>
+<li>
+<p>利用<code>Blob.prototype.slice</code>进行文件切片</p>
+</li>
+<li>
+<p><code>FormData</code>携带<code>chunk</code>，<code>filename</code>，<code>hash</code>，<code>index</code>等数据，上传到服务端，收到所有切片后按<code>index</code>合并</p>
+</li>
+</ul>
+<h3 id="web-worker生成hash">web-worker生成hash</h3>
+<ul>
+<li>
+<p>通过库，例如<code>spark-md5</code>生成<code>hash</code></p>
+</li>
+<li>
+<p>创建生成hash的js文件，使用时通过<code>new Woker(url)</code>来引入， 通过<code>postMessage</code>来传递hash值</p>
+</li>
+</ul>
+<h3 id="暂停继续">暂停/继续</h3>
+<ul>
+<li>
+<p><code>XMLHttpRequest</code>的<code>abort()</code>取消上传切片，实现暂停</p>
+</li>
+<li>
+<p>继续时，查询服务器已上传的<code>切片序列</code>，上传其余切片</p>
+<ul>
+<li>也可以通过本地<code>storage</code>实现，但是服务器更准确，更不易出BUG</li>
+</ul>
+</li>
+</ul>
+<h3 id="进度条">进度条</h3>
+<ul>
+<li>
+<p><code>XMLHttpRequest</code>的<code>upload.onprogress</code>事件，查询进度</p>
+<ul>
+<li>或者用<code>websocket</code>，需要服务端也是用<code>websocket</code></li>
+</ul>
+</li>
+<li>
+<p>将所有切片进度相加，即为总进度</p>
+</li>
+<li>
+<p>可以通过<code>proxy</code>或<code>Object.defineProperty</code>设置<code>set</code>时修改dom进度展示</p>
+</li>
+<li>
+<p>暂停时<code>abort</code>后，切片进度实际为0</p>
+</li>
+</ul>
+<h2 id="报错重试并发控制">报错重试，并发控制</h2>
+<p>这些非文件上传核心点。应该归为请求中实现。</p>
+<h2 id="思维导图">思维导图</h2>
+<p><img src="https://i.loli.net/2021/05/13/jLS2kQzNVubDZOv.png" alt="image.png"></p>
+<h2 id="前端代码">前端代码</h2>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-typescript" data-lang="typescript">
+
+<span style="color:#66d9ef">function</span> <span style="color:#a6e22e">post</span>(<span style="color:#a6e22e">url</span> <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;http://localhost:8100/upload&#39;</span>, <span style="color:#a6e22e">data</span>, {
+    <span style="color:#a6e22e">onUploadProgress</span> <span style="color:#f92672">=</span> (<span style="color:#a6e22e">e</span>) <span style="color:#f92672">=&gt;</span> <span style="color:#66d9ef">undefined</span>,
+    <span style="color:#a6e22e">getCancel</span> <span style="color:#f92672">=</span> (<span style="color:#a6e22e">abort</span>) <span style="color:#f92672">=&gt;</span> <span style="color:#66d9ef">undefined</span>,
+} <span style="color:#f92672">=</span> {}) {
+    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">Promise</span><span style="color:#f92672">&lt;</span>{ <span style="color:#a6e22e">data</span>: <span style="color:#66d9ef">any</span> }<span style="color:#f92672">&gt;</span>(<span style="color:#a6e22e">resolve</span> <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">xhr</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">XMLHttpRequest</span>();
+        <span style="color:#a6e22e">xhr</span>.<span style="color:#a6e22e">upload</span>.<span style="color:#a6e22e">onprogress</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">onUploadProgress</span>
+        <span style="color:#a6e22e">getCancel</span><span style="color:#f92672">?</span>.(<span style="color:#a6e22e">xhr</span>.<span style="color:#a6e22e">abort</span>.<span style="color:#a6e22e">bind</span>(<span style="color:#a6e22e">xhr</span>))
+        <span style="color:#a6e22e">xhr</span>.<span style="color:#a6e22e">onload</span> <span style="color:#f92672">=</span> (<span style="color:#a6e22e">e</span>) <span style="color:#f92672">=&gt;</span> {
+            <span style="color:#a6e22e">resolve</span>({
+                <span style="color:#75715e">// @ts-ignore
+</span><span style="color:#75715e"></span>                <span style="color:#a6e22e">data</span>: <span style="color:#66d9ef">e.target.response</span>,
+            });
+        };
+        <span style="color:#a6e22e">xhr</span>.<span style="color:#a6e22e">open</span>(<span style="color:#e6db74">&#39;POST&#39;</span>, <span style="color:#a6e22e">url</span>);
+        <span style="color:#a6e22e">xhr</span>.<span style="color:#a6e22e">send</span>(<span style="color:#a6e22e">data</span>);
+    });
+}
+
+<span style="color:#75715e">// start
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">type</span> <span style="color:#a6e22e">Chunk</span> <span style="color:#f92672">=</span> {
+    <span style="color:#a6e22e">cancel</span><span style="color:#f92672">?:</span> () <span style="color:#f92672">=&gt;</span> <span style="color:#66d9ef">void</span>;
+    <span style="color:#a6e22e">chunk</span>: <span style="color:#66d9ef">Blob</span>
+    <span style="color:#a6e22e">fileName</span>: <span style="color:#66d9ef">string</span>
+    <span style="color:#a6e22e">progress</span>: <span style="color:#66d9ef">number</span>
+    <span style="color:#a6e22e">index</span>: <span style="color:#66d9ef">number</span>
+}
+<span style="color:#75715e">// md5
+</span><span style="color:#75715e">// 切片大小
+</span><span style="color:#75715e"></span><span style="color:#66d9ef">const</span> <span style="color:#a6e22e">SliceSize</span>: <span style="color:#66d9ef">number</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">1024</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">1024</span>
+
+
+<span style="color:#66d9ef">class</span> <span style="color:#a6e22e">BigFileUploadManager</span> {
+    <span style="color:#75715e">// 文件进度
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">progress</span>: <span style="color:#66d9ef">number</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+    <span style="color:#75715e">// 文件hash
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">hash</span>: <span style="color:#66d9ef">string</span>
+    <span style="color:#75715e">// web-worker
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">worker</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">Worker</span>(<span style="color:#e6db74">&#39;http://localhost:8100/work.js&#39;</span>)
+    <span style="color:#75715e">// 切片信息列表
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">chunkInfoList</span>: <span style="color:#66d9ef">Chunk</span>[] <span style="color:#f92672">=</span> []
+
+    <span style="color:#66d9ef">constructor</span>(
+        <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">file</span>: <span style="color:#66d9ef">File</span>,
+        <span style="color:#66d9ef">public</span> <span style="color:#a6e22e">chunkSize</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">2</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">1024</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">1024</span>,
+    ) {
+        <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">createFileChunk</span>()
+    }
+
+    <span style="color:#75715e">// 生成chunk
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">createFileChunk</span> <span style="color:#f92672">=</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">fileName</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">name</span>
+        <span style="color:#66d9ef">let</span> <span style="color:#a6e22e">current</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+        <span style="color:#66d9ef">let</span> <span style="color:#a6e22e">i</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+        <span style="color:#66d9ef">while</span> (<span style="color:#a6e22e">current</span> <span style="color:#f92672">&lt;</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">size</span>) {
+            <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">chunk</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">slice</span>(<span style="color:#a6e22e">current</span>, <span style="color:#a6e22e">current</span> <span style="color:#f92672">+</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkSize</span>)
+            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkInfoList</span>.<span style="color:#a6e22e">push</span>({
+                <span style="color:#a6e22e">chunk</span>,
+                <span style="color:#a6e22e">fileName</span>,
+                <span style="color:#a6e22e">progress</span>: <span style="color:#66d9ef">0</span>,
+                <span style="color:#a6e22e">index</span>: <span style="color:#66d9ef">i</span>,
+            })
+            <span style="color:#a6e22e">current</span> <span style="color:#f92672">+=</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkSize</span>;
+            <span style="color:#a6e22e">i</span><span style="color:#f92672">++</span>
+        }
+    }
+    <span style="color:#75715e">// 生成hash
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">createChunkHash</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">async</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">worker</span>.<span style="color:#a6e22e">postMessage</span>({
+            <span style="color:#a6e22e">chunkList</span>: <span style="color:#66d9ef">this.chunkInfoList</span>,
+        })
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">Promise</span>((<span style="color:#a6e22e">resolve</span>, <span style="color:#a6e22e">reject</span>) <span style="color:#f92672">=&gt;</span> {
+            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">worker</span>.<span style="color:#a6e22e">addEventListener</span>(<span style="color:#e6db74">&#39;message&#39;</span>, <span style="color:#a6e22e">e</span> <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">hash</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">e</span>.<span style="color:#a6e22e">data</span>.<span style="color:#a6e22e">hash</span>
+                <span style="color:#a6e22e">resolve</span>(<span style="color:#a6e22e">e</span>.<span style="color:#a6e22e">data</span>.<span style="color:#a6e22e">hash</span>)
+            })
+            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">worker</span>.<span style="color:#a6e22e">addEventListener</span>(<span style="color:#e6db74">&#39;messageerror&#39;</span>, <span style="color:#a6e22e">e</span> <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#a6e22e">reject</span>(<span style="color:#a6e22e">e</span>)
+            })
+        })
+    }
+    <span style="color:#75715e">// 上传
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">uploadChunks</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">async</span> (<span style="color:#a6e22e">filter</span><span style="color:#f92672">:</span> (<span style="color:#a6e22e">c</span>: <span style="color:#66d9ef">Chunk</span>) <span style="color:#f92672">=&gt;</span> <span style="color:#66d9ef">boolean</span> <span style="color:#f92672">=</span> () <span style="color:#f92672">=&gt;</span> <span style="color:#66d9ef">true</span>) <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">requestList</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkInfoList</span>
+            .<span style="color:#a6e22e">filter</span>(<span style="color:#a6e22e">filter</span>)
+            .<span style="color:#a6e22e">map</span>((<span style="color:#a6e22e">chunk</span>) <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">formData</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">FormData</span>()
+                <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;chunk&#39;</span>, <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">chunk</span>)
+                <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;hash&#39;</span>, <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">hash</span>)
+                <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;index&#39;</span>, <span style="color:#e6db74">`</span><span style="color:#e6db74">${</span><span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">index</span><span style="color:#e6db74">}</span><span style="color:#e6db74">`</span>)
+
+                <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">post</span>(
+                    <span style="color:#e6db74">&#39;http://localhost:8100/upload&#39;</span>,
+                    <span style="color:#a6e22e">formData</span>,
+                    {
+                        <span style="color:#a6e22e">onUploadProgress</span><span style="color:#f92672">:</span> (<span style="color:#a6e22e">e</span>: <span style="color:#66d9ef">ProgressEvent</span>) <span style="color:#f92672">=&gt;</span> {
+                            <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">e</span>.<span style="color:#a6e22e">lengthComputable</span>) {
+                                <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">e</span>.<span style="color:#a6e22e">loaded</span> <span style="color:#f92672">/</span> <span style="color:#a6e22e">e</span>.<span style="color:#a6e22e">total</span> <span style="color:#f92672">*</span> <span style="color:#ae81ff">100</span>
+                                <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">100</span> <span style="color:#f92672">?</span> <span style="color:#a6e22e">100</span> : <span style="color:#66d9ef">chunk.progress</span>
+                            }
+                            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">uploadPercentage</span>()
+                        },
+                        <span style="color:#a6e22e">getCancel</span>: <span style="color:#66d9ef">c</span> <span style="color:#f92672">=&gt;</span> {
+                            <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">cancel</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">c</span>
+                        },
+                    },
+                )
+            })
+        <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">await</span> <span style="color:#a6e22e">Promise</span>.<span style="color:#a6e22e">all</span>(<span style="color:#a6e22e">requestList</span>)
+    }
+    <span style="color:#75715e">// 文件上传的进度
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">uploadPercentage</span> <span style="color:#f92672">=</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkInfoList</span>.<span style="color:#a6e22e">reduce</span>&lt;<span style="color:#f92672">number</span>&gt;((<span style="color:#a6e22e">progress</span>, <span style="color:#a6e22e">chunk</span>) <span style="color:#f92672">=&gt;</span> {
+            <span style="color:#a6e22e">progress</span> <span style="color:#f92672">+=</span> <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">*</span> (<span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">size</span> <span style="color:#f92672">/</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">size</span>)
+            <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">progress</span> <span style="color:#f92672">&gt;</span> <span style="color:#ae81ff">100</span> <span style="color:#f92672">?</span> <span style="color:#a6e22e">100</span> : <span style="color:#66d9ef">progress</span>
+        }, <span style="color:#ae81ff">0</span>)
+    }
+
+    <span style="color:#75715e">// 暂停
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">pause</span> <span style="color:#f92672">=</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkInfoList</span>.<span style="color:#a6e22e">forEach</span>(<span style="color:#a6e22e">chunk</span> <span style="color:#f92672">=&gt;</span> {
+            <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">cancel</span><span style="color:#f92672">?</span>.()
+        })
+    }
+
+    <span style="color:#75715e">// 继续
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">checkAndUpload</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">async</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">formData</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">FormData</span>()
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;uploadInfo&#39;</span>, <span style="color:#e6db74">&#39;true&#39;</span>)
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;hash&#39;</span>, <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">hash</span>)
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;filename&#39;</span>, <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">name</span>)
+        <span style="color:#66d9ef">const</span> {<span style="color:#a6e22e">data</span>} <span style="color:#f92672">=</span> <span style="color:#66d9ef">await</span> <span style="color:#a6e22e">post</span>(<span style="color:#e6db74">&#39;http://localhost:8100/upload&#39;</span>, <span style="color:#a6e22e">formData</span>)
+        <span style="color:#66d9ef">const</span> {<span style="color:#a6e22e">haveFile</span>, <span style="color:#a6e22e">chunkListIndex</span>} <span style="color:#f92672">=</span> <span style="color:#a6e22e">JSON</span>.<span style="color:#a6e22e">parse</span>(<span style="color:#66d9ef">typeof</span> <span style="color:#a6e22e">data</span> <span style="color:#f92672">===</span> <span style="color:#e6db74">&#34;string&#34;</span> <span style="color:#f92672">&amp;&amp;</span> <span style="color:#a6e22e">data</span>)
+        <span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span><span style="color:#a6e22e">haveFile</span>) {
+            <span style="color:#75715e">// 过滤已上传的文件
+</span><span style="color:#75715e"></span>            <span style="color:#66d9ef">await</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">uploadChunks</span>(<span style="color:#a6e22e">chunk</span> <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">chunkListIndex</span>.<span style="color:#a6e22e">includes</span>(<span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">index</span>)) {
+                    <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">100</span>
+                    <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">false</span>
+                }
+                <span style="color:#66d9ef">return</span> <span style="color:#66d9ef">true</span>
+            })
+            <span style="color:#66d9ef">await</span> <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">sendMergeRequest</span>()
+            <span style="color:#a6e22e">alert</span>(<span style="color:#e6db74">&#39;合并成功!&#39;</span>)
+        } <span style="color:#66d9ef">else</span> {
+            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">chunkInfoList</span>.<span style="color:#a6e22e">forEach</span>(<span style="color:#a6e22e">chunk</span><span style="color:#f92672">=&gt;</span>{
+                <span style="color:#a6e22e">chunk</span>.<span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">100</span>
+            })
+            <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">uploadPercentage</span>()
+            <span style="color:#a6e22e">alert</span>(<span style="color:#e6db74">&#39;文件已经存在!&#39;</span>)
+        }
+    }
+
+    <span style="color:#75715e">// 发送合并
+</span><span style="color:#75715e"></span>    <span style="color:#a6e22e">sendMergeRequest</span> <span style="color:#f92672">=</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">formData</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">FormData</span>()
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;merge&#39;</span>, <span style="color:#e6db74">&#39;true&#39;</span>)
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;hash&#39;</span>, <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">hash</span>)
+        <span style="color:#a6e22e">formData</span>.<span style="color:#a6e22e">append</span>(<span style="color:#e6db74">&#39;filename&#39;</span>, <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">name</span>)
+        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">post</span>(<span style="color:#e6db74">&#39;http://localhost:8100/upload&#39;</span>, <span style="color:#a6e22e">formData</span>)
+    }
+
+    <span style="color:#a6e22e">upload</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">async</span> () <span style="color:#f92672">=&gt;</span> {
+        <span style="color:#66d9ef">this</span>.<span style="color:#a6e22e">checkAndUpload</span>()
+    }
+}
+
+
+<span style="color:#66d9ef">async</span> <span style="color:#66d9ef">function</span> <span style="color:#a6e22e">submitUpload() {</span>
+    <span style="color:#75715e">//获得文件列表，注意这里不是数组，而是对象
+</span><span style="color:#75715e"></span>    <span style="color:#66d9ef">let</span> <span style="color:#a6e22e">fileList</span>: <span style="color:#66d9ef">FileList</span> <span style="color:#f92672">=</span> (document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;f1&#39;</span>) <span style="color:#66d9ef">as</span> <span style="color:#a6e22e">HTMLInputElement</span>).<span style="color:#a6e22e">files</span>;
+
+    <span style="color:#66d9ef">for</span> (<span style="color:#66d9ef">let</span> <span style="color:#a6e22e">i</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>; <span style="color:#a6e22e">i</span> <span style="color:#f92672">&lt;</span> <span style="color:#a6e22e">fileList</span>.<span style="color:#a6e22e">length</span>; <span style="color:#a6e22e">i</span><span style="color:#f92672">++</span>) {
+        <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">file</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">fileList</span>[<span style="color:#a6e22e">i</span>]
+        <span style="color:#66d9ef">if</span> (<span style="color:#a6e22e">file</span>.<span style="color:#a6e22e">size</span> <span style="color:#f92672">&gt;</span> <span style="color:#a6e22e">SliceSize</span>) {
+            <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">Manager</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">new</span> <span style="color:#a6e22e">BigFileUploadManager</span>(<span style="color:#a6e22e">file</span>)
+
+            document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;cancel&#39;</span>).<span style="color:#a6e22e">onclick</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">Manager</span>.<span style="color:#a6e22e">pause</span>;
+            document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;continue&#39;</span>).<span style="color:#a6e22e">onclick</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">Manager</span>.<span style="color:#a6e22e">checkAndUpload</span>;
+
+            <span style="color:#66d9ef">await</span> <span style="color:#a6e22e">Manager</span>.<span style="color:#a6e22e">createChunkHash</span>()
+
+            <span style="color:#a6e22e">Manager</span>.<span style="color:#a6e22e">chunkInfoList</span>.<span style="color:#a6e22e">forEach</span>(<span style="color:#a6e22e">chunk</span> <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#66d9ef">const</span> {<span style="color:#a6e22e">progress</span>} <span style="color:#f92672">=</span> <span style="color:#a6e22e">createElement</span>({
+                    <span style="color:#a6e22e">filename</span>: <span style="color:#66d9ef">chunk.index</span>,
+                    <span style="color:#a6e22e">size</span>: <span style="color:#66d9ef">chunk.chunk.size</span>,
+                })
+                <span style="color:#66d9ef">let</span> <span style="color:#a6e22e">tem</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+                Object.<span style="color:#a6e22e">defineProperty</span>(<span style="color:#a6e22e">chunk</span>, <span style="color:#e6db74">&#39;progress&#39;</span>, {
+                    <span style="color:#66d9ef">set</span>(<span style="color:#a6e22e">v</span>: <span style="color:#66d9ef">any</span>) {
+                        <span style="color:#a6e22e">tem</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">v</span>
+                        <span style="color:#a6e22e">progress</span>.<span style="color:#a6e22e">value</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">v</span>
+                    },
+                    <span style="color:#66d9ef">get</span>()<span style="color:#f92672">:</span> <span style="color:#66d9ef">any</span> {
+                        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">tem</span>
+                    },
+                })
+            });
+            (() <span style="color:#f92672">=&gt;</span> {
+                <span style="color:#66d9ef">let</span> <span style="color:#a6e22e">tem</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+                <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">sum</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;sum&#39;</span>) <span style="color:#66d9ef">as</span> <span style="color:#a6e22e">HTMLProgressElement</span>
+                Object.<span style="color:#a6e22e">defineProperty</span>(<span style="color:#a6e22e">Manager</span>, <span style="color:#e6db74">&#39;progress&#39;</span>, {
+                    <span style="color:#66d9ef">set</span>(<span style="color:#a6e22e">v</span>: <span style="color:#66d9ef">any</span>) {
+                        <span style="color:#a6e22e">tem</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">v</span>
+                        <span style="color:#a6e22e">sum</span>.<span style="color:#a6e22e">value</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">v</span>
+                    },
+                    <span style="color:#66d9ef">get</span>()<span style="color:#f92672">:</span> <span style="color:#66d9ef">any</span> {
+                        <span style="color:#66d9ef">return</span> <span style="color:#a6e22e">tem</span>
+                    },
+                })
+            })();
+
+            <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">res</span> <span style="color:#f92672">=</span> <span style="color:#66d9ef">await</span> <span style="color:#a6e22e">Manager</span>.<span style="color:#a6e22e">upload</span>();
+        }
+    }
+
+}
+
+<span style="color:#66d9ef">function</span> <span style="color:#a6e22e">createElement</span>({<span style="color:#a6e22e">filename</span>, <span style="color:#a6e22e">size</span>}) {
+    <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">div</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">createElement</span>(<span style="color:#e6db74">&#39;div&#39;</span>)
+    <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">spanFileName</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">createElement</span>(<span style="color:#e6db74">&#39;span&#39;</span>)
+    <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">spanFileSize</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">createElement</span>(<span style="color:#e6db74">&#39;span&#39;</span>)
+    <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">progress</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">createElement</span>(<span style="color:#e6db74">&#39;progress&#39;</span>)
+    <span style="color:#66d9ef">const</span> <span style="color:#a6e22e">spanCancel</span> <span style="color:#f92672">=</span> document.<span style="color:#a6e22e">createElement</span>(<span style="color:#e6db74">&#39;span&#39;</span>)
+    <span style="color:#a6e22e">spanFileName</span>.<span style="color:#a6e22e">innerText</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">filename</span>
+    <span style="color:#a6e22e">spanFileSize</span>.<span style="color:#a6e22e">innerText</span> <span style="color:#f92672">=</span> <span style="color:#a6e22e">size</span>
+    <span style="color:#a6e22e">spanCancel</span>.<span style="color:#a6e22e">innerText</span> <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;取消&#39;</span>
+    <span style="color:#a6e22e">progress</span>.<span style="color:#a6e22e">max</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">100</span>
+    <span style="color:#a6e22e">progress</span>.<span style="color:#a6e22e">value</span> <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>
+    <span style="color:#a6e22e">div</span>.<span style="color:#a6e22e">append</span>(<span style="color:#a6e22e">spanFileName</span>, <span style="color:#a6e22e">spanFileSize</span>, <span style="color:#a6e22e">progress</span>)
+    document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;container&#39;</span>).<span style="color:#a6e22e">append</span>(<span style="color:#a6e22e">div</span>)
+    <span style="color:#66d9ef">return</span> {
+        <span style="color:#a6e22e">progress</span>,
+        <span style="color:#a6e22e">spanCancel</span>,
+    }
+}
+
+document.<span style="color:#a6e22e">getElementById</span>(<span style="color:#e6db74">&#39;btn-submit&#39;</span>).<span style="color:#a6e22e">addEventListener</span>(<span style="color:#e6db74">&#39;click&#39;</span>, <span style="color:#a6e22e">submitUpload</span>);
+</code></pre></div>
+    </div>
+    
+      
+        <div class="pagination">
+          <div class="pagination__title">
+            <span class="pagination__title-h"
+              >Read other posts</span
+            >
+            <hr />
+          </div>
+          <div class="pagination__buttons">
+            
+            
+              <span class="button next">
+                <a href="https://liu-zhi-fei.github.io/posts/%E7%96%91%E9%9A%BE%E6%9D%82%E7%97%87mac%E6%96%87%E4%BB%B6%E5%A4%B9.ds_store%E5%AF%BC%E8%87%B4node%E5%90%88%E5%B9%B6%E6%96%87%E4%BB%B6%E5%A4%B1%E8%B4%A5/">
+                  <span class="button__text">【疑难杂症】mac文件夹.DS_Store，导致node合并文件失败</span>
+                  <span class="button__icon">→</span>
+                </a>
+              </span>
+            
+          </div>
+        </div>
+      
+    
+
+    
+      
+        
+
+      
+    
+  </div>
+
+      </div>
+
+      
+        <footer class="footer">
+  <div class="footer__inner">
+    
+      <a
+  href="/"
+  class="logo"
+  style="text-decoration: none;"
+>
+  
+    <span class="logo__mark"><svg xmlns="http://www.w3.org/2000/svg" class="greater-icon" viewBox="0 0 44 44">
+  <path fill="none" d="M15 8l14.729 14.382L15 35.367" />
+</svg>
+</span>
+    <span class="logo__text"
+      >hello frizhd</span
+    >
+    <span class="logo__cursor"></span>
+  
+</a>
+
+      <div class="copyright">
+        <span
+          >© 2021 Powered by
+          <a href="https://gohugo.io" target="_blank" rel="noopener">Hugo</a></span
+        >
+        <span
+          >Theme created by
+          <a href="https://twitter.com/panr" target="_blank" rel="noopener">panr</a></span
+        >
+      </div>
+    
+  </div>
+</footer>
+
+<script src="https://liu-zhi-fei.github.io/assets/main.js"></script>
+<script src="https://liu-zhi-fei.github.io/assets/prism.js"></script>
+
+
+      
+    </div>
+
+    
+  </body>
+</html>

@@ -150,11 +150,59 @@
   <div class="posts">
     
       <div class="post on-list">
-        <h1 class="post-title"><a href="https://liu-zhi-fei.github.io/posts/my-first-post/">My First Post</a></h1>
+        <h1 class="post-title"><a href="https://liu-zhi-fei.github.io/posts/%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E5%88%87%E7%89%87%E6%96%AD%E7%82%B9%E7%BB%AD%E4%BC%A0%E8%BF%9B%E5%BA%A6/">大文件上传（切片，断点续传，进度）</a></h1>
         <div class="post-meta">
           
             <span class="post-date">
-              2021-05-02
+              2021-05-13
+            </span>
+
+            
+          
+          
+
+
+          
+        </div>
+
+        
+
+        
+
+        <div class="post-content">
+          
+            
+              大文件上传（切片，断点续传，进度） 此文只将关键的原理点写出。
+大文件切片上传原理 上传，合并   利用Blob.prototype.slice进行文件切片
+  FormData携带chunk，filename，hash，index等数据，上传到服务端，收到所有切片后按index合并
+  web-worker生成hash   通过库，例如spark-md5生成hash
+  创建生成hash的js文件，使用时通过new Woker(url)来引入， 通过postMessage来传递hash值
+  暂停/继续   XMLHttpRequest的abort()取消上传切片，实现暂停
+  继续时，查询服务器已上传的切片序列，上传其余切片
+ 也可以通过本地storage实现，但是服务器更准确，更不易出BUG    进度条   XMLHttpRequest的upload.onprogress事件，查询进度
+ 或者用websocket，需要服务端也是用websocket    将所有切片进度相加，即为总进度
+  可以通过proxy或Object.defineProperty设置set时修改dom进度展示
+  暂停时abort后，切片进度实际为0
+  报错重试，并发控制 这些非文件上传核心点。应该归为请求中实现。
+思维导图 前端代码 function post(url = &#39;http://localhost:8100/upload&#39;, data, { onUploadProgress = (e) =&gt; undefined, getCancel = (abort) =&gt; undefined, } = {}) { return new Promise&lt;{ data: any }&gt;(resolve =&gt; { const xhr = new XMLHttpRequest(); xhr.
+            
+          
+        </div>
+        
+          <div>
+            <a class="read-more button" href="/posts/%E5%A4%A7%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E5%88%87%E7%89%87%E6%96%AD%E7%82%B9%E7%BB%AD%E4%BC%A0%E8%BF%9B%E5%BA%A6/"
+              >Read more →</a
+            >
+          </div>
+        
+      </div>
+    
+      <div class="post on-list">
+        <h1 class="post-title"><a href="https://liu-zhi-fei.github.io/posts/%E7%96%91%E9%9A%BE%E6%9D%82%E7%97%87mac%E6%96%87%E4%BB%B6%E5%A4%B9.ds_store%E5%AF%BC%E8%87%B4node%E5%90%88%E5%B9%B6%E6%96%87%E4%BB%B6%E5%A4%B1%E8%B4%A5/">【疑难杂症】mac文件夹.DS_Store，导致node合并文件失败</a></h1>
+        <div class="post-meta">
+          
+            <span class="post-date">
+              2021-05-05
             </span>
 
             
@@ -176,7 +224,51 @@
         </div>
         
           <div>
-            <a class="read-more button" href="/posts/my-first-post/"
+            <a class="read-more button" href="/posts/%E7%96%91%E9%9A%BE%E6%9D%82%E7%97%87mac%E6%96%87%E4%BB%B6%E5%A4%B9.ds_store%E5%AF%BC%E8%87%B4node%E5%90%88%E5%B9%B6%E6%96%87%E4%BB%B6%E5%A4%B1%E8%B4%A5/"
+              >Read more →</a
+            >
+          </div>
+        
+      </div>
+    
+      <div class="post on-list">
+        <h1 class="post-title"><a href="https://liu-zhi-fei.github.io/posts/%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E6%80%9D%E8%B7%AF%E4%B8%8E%E5%9C%BA%E6%99%AF/">文件上传（思路与场景）</a></h1>
+        <div class="post-meta">
+          
+            <span class="post-date">
+              2021-05-03
+            </span>
+
+            
+          
+          
+
+
+          
+        </div>
+
+        
+
+        
+
+        <div class="post-content">
+          
+            
+              文件上传（思路与场景） 文件上传规则 客户端 请求方式: POST
+请求头: Content-Type：mutipart/form-data；boundary=分割字符串
+请求体： 由boundary分割表单项，表单项由Content-Type和Content-Disposition组成
+Content-Disposition: form-data 为固定值，表示一个表单元素，name表单字段名（可以重名，例如选择多张图片）， filename，文件初始名称
+Content-Type：表示当前的内容的 MIME 类型，是图片还是文本还是二进制数据。
+## 请求头 4个- Content-Type: multipart/form-data; boundary=----WebKitFormBoundarygfkSSPeA0dkEB1OD ## 请求体 6个- ------WebKitFormBoundarygfkSSPeA0dkEB1OD Content-Disposition: form-data; name=&#34;f1&#34;; filename=&#34;wallhaven-e7zqro.jpg&#34; Content-Type: image/jpeg ------WebKitFormBoundarygfkSSPeA0dkEB1OD Content-Disposition: form-data; name=&#34;f1&#34;; filename=&#34;wallhaven-eyxzxr.jpg&#34; Content-Type: image/jpeg ------WebKitFormBoundarygfkSSPeA0dkEB1OD-- 服务端   获取到boundary
+  合并二进制数据
+  根据boundary等规则，取出数据和信息
+  function bufferSplit(buffer, delimiter) { let arr = []; let n = 0; // 当分隔符存在时  while ((n = buffer.
+            
+          
+        </div>
+        
+          <div>
+            <a class="read-more button" href="/posts/%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E6%80%9D%E8%B7%AF%E4%B8%8E%E5%9C%BA%E6%99%AF/"
               >Read more →</a
             >
           </div>
